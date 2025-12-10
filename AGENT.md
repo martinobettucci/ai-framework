@@ -13,6 +13,6 @@
 
 ## Updating the docs
 - `doc/DAT.md` — domain language, core entities, data flows, constraints, and assumptions.
-- `doc/SPECIFICIATIONS.md` — product/feature requirements, scope boundaries, constraints, and risks.
+- `doc/SPECIFICATIONS.md` — product/feature requirements, scope boundaries, constraints, and risks.
 - `doc/API.md` — Python backend contracts, endpoints, payloads, auth, and error conventions.
 - Reflect UI/backend coupling in the specs and API docs; keep examples and payloads synchronized with the implemented behavior.
