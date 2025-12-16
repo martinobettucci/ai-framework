@@ -1,8 +1,8 @@
 # Entity Knowledge Queries - Technical Specifications v0
 
 ## 1. Objective and scope
-- Provide a reusable module to create business entities, ingest and normalize heterogeneous sources, build/maintain queryable context (indexes, knowledge graphs, summaries), run knowledge queries over entities, and return structured answers with confidence and resolution status.
-- Must stay agnostic to specific products (Grants, content catalogs, CRM) and expose a stable API for reuse.
+- Make questions the contract at the center of Entity Knowledge Queries: declare questions (schemas, activation rules), ingest and normalize sources, build/maintain context (indexes, graphs, summaries) to serve those questions, and return structured answers with confidence/resolution status.
+- Must stay agnostic to specific products (Grants, content catalogs, CRM) and expose a stable API for reuse; every artifact and strategy exists to resolve declared questions.
 
 ## 2. Key concepts
 ### 2.1 Entity
@@ -94,6 +94,7 @@
 2) Encoding: apply chunking strategy (simple/semantic/paragraph/hierarchical); encode into usable representations (tokens/embeddings/features).
 3) Augmentation: build BM25 indexes; generate/store embeddings; derive metadata; build/update knowledge graphs.
 4) Storage: persist artifacts (indexes/graphs/summaries/metadata) in DB and file system; update `contexts` references.
+- Default persistence: Postgres for relational tables, pgvector for embeddings, S3-compatible object storage for payloads/artifacts, optional graph store (e.g., Neo4j) for graph-heavy features, Redis + Celery (or equivalent) for jobs.
 - Each sub-step is a dedicated class to compose per source, tenant, or ingestion profile.
 
 ### 5.2 Ingestion profiles
@@ -101,6 +102,7 @@
 - `standard` for typical cases.
 - `rich` for content bundles/complex projects.
 - Each profile governs artifacts generated, analysis depth, and context rebuild frequency.
+- Default mapping by entity type: `person` -> `standard`; `project` -> `standard` (upgrade to `rich` for complex dossiers); `content_bundle` -> `rich`; fallback to `standard` if unspecified.
 
 ## 6. Question resolution engine
 ### 6.1 Standard cycle
@@ -116,11 +118,19 @@
 - Retrieval strategies: `hyde_retrieval`, `rerank_retrieval`, `grounded_gridsearch` (consume context artifacts; return passages with provenance).
 - Answer strategies: `scalar_answer`, `categorical_answer`, `free_text_answer`, `document_answer`, `scorecard_answer` (consume passages, respect `expected_output_schema`, include citations).
 - Higher-level profiles can combine retrieval/answer strategies (e.g., `deterministic_first`, `ia_first`, `graph_heavy`) and can be set per question, entity type, or tenant.
+- Default retrieval/answer pairing by `question_type`:
+  - `scalar`/`categorical`: `rerank_retrieval` + `deterministic_first` (rules then LLM).
+  - `free_text`/`document`: `rerank_retrieval` with HyDE fallback + `ia_first`.
+  - `scorecard`: `graph_heavy` when graph artifacts exist, else `standard`.
+- Recompute only if the answer is missing, `unresolved`/`stale`, or `force_regeneration=true` is set.
 
 ## 7. Governance, security, multi-tenant
 - Isolation: each entity belongs to a `tenant_id`; contexts, sources, answers isolated per tenant; no cross-tenant leakage.
 - RBAC (minimal): `admin` (schema/strategies/config), `integrator` (entities/sources/API use), `viewer` (read entities/answers/explanations).
 - Observability: metrics per tenant and entity type (latency, resolved rate, source volume, context size).
+- Auth defaults: backend issues bearer tokens (`Authorization: Bearer <token>`) plus `X-Tenant-ID` header on every request; tokens default to the entities created by the issuing user. Entity owners can grant access to others at the entity level via roles. Roles: `admin` (reserved), `owner` (entity creator), and custom roles defined per tenant/group; users may request to join custom roles but require owner approval. Webhooks signed via shared-secret HMAC.
+- Stack defaults: FastAPI + Postgres/pgvector, S3-compatible object storage, Redis + Celery for jobs; optional graph store enabled for graph-heavy needs.
+- UI: admins can manage API tokens (issue/list/revoke) via the admin UI; token secrets only visible at creation time.
 
 ## 8. Extensibility and roadmap
 - Add retrieval strategies; native multimodality (image/audio/video) in graphs; external enrichment tools; advanced context versioning with rollback; offline batch recomputation mode.

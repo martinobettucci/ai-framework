@@ -1,17 +1,22 @@
 # API (Python backend)
 
 ## Overview
-- Serves Entity Knowledge Queries: manage entities, ingest sources, build versioned context, define questions/templates, run knowledge queries, and return structured answers with confidence and provenance.
+- Serves question-centric Entity Knowledge Queries: declare questions/templates (with schemas and activation rules), manage entities, ingest sources, build versioned context, run knowledge queries, and return structured answers with confidence and provenance.
+- All artifacts (indexes/embeddings/graphs/summaries) and pipelines exist to resolve declared questions; recomputation happens when questions or context change.
 - Consumed by the JavaScript UI; UI/backend contracts must stay aligned with `doc/SPECIFICATIONS.md` and data terminology in `doc/DAT.md`.
 - Base URLs: TBD for local/staging/prod.
 
 ## Tech stack
-- Framework: TBD (candidate: FastAPI). ORM/persistence: RDBMS + vector store + file/blob storage; graph DB optional for knowledge graph artifacts.
-- Background jobs: TBD (e.g., Celery/RQ) for ingestion and context rebuilds.
+- Framework: FastAPI + Pydantic; ORM: SQLAlchemy.
+- Persistence: Postgres for relational tables; pgvector for embeddings; S3-compatible object storage for raw payloads and artifacts; optional graph store (e.g., Neo4j) when graph-heavy features are enabled.
+- Background jobs: Celery + Redis (or equivalent) for ingestion/context rebuild and re-eval pipelines.
 
 ## Authentication and authorization
-- Approach TBD. Must support multi-tenant isolation (`tenant_id`) and minimal RBAC roles: `admin`, `integrator`, `viewer`.
-- Webhook auth/signature model TBD.
+- API issues bearer tokens; use `Authorization: Bearer <token>` and `X-Tenant-ID` on all requests.
+- Token scope defaults to the issuing user and the entities they created; entity owners can grant access to other users at the entity level via roles.
+- Roles: `admin` (reserved), `owner` (entity creator), and custom roles per tenant/group. Custom roles are defined by admins; users may request to join but require owner approval. `admin` may not be customized; `owner` is implicit and non-transferable without reassignment rules (TBD).
+- Webhooks signed with shared-secret HMAC; receivers must verify signatures before processing events.
+- Service tokens may be issued for background jobs; scoped to tenant and role.
 
 ## Endpoints
 | Path | Method | Description | Request shape | Response shape | Notes |
@@ -30,6 +35,21 @@
 | `/answers/{answer_id}` | GET | Fetch answer | path `answer_id` | detailed answer with explanations | |
 | `/answers/{answer_id}/reeval` | POST | Re-evaluate answer | options: `force_latest_context`, `strategy_override` | re-eval job/result | |
 | `/entities/{entity_id}/questions/{question_id}/reeval` | POST | Re-evaluate question for entity | options TBD | re-eval job/result | |
+| `/auth/tokens` | POST | Issue API token | admin-only; token attributes/scopes | token id, redacted token | managed in UI by admins |
+| `/auth/tokens` | GET | List tokens | admin-only | list (no secret values) | filtering by user/role |
+| `/auth/tokens/{token_id}` | DELETE | Revoke token | admin-only | status | immediate revocation |
+
+## Default strategies and profiles
+- Ingestion profiles:
+  - `light`: minimal preprocessing, BM25 only; use for low-volume entities/tests.
+  - `standard` (default): preprocessing + semantic chunking + embeddings + BM25.
+  - `rich`: hierarchical chunking + embeddings + knowledge graph + BM25; for content bundles/complex projects.
+- Default mapping by entity type: `person` -> `standard`; `project` -> `standard` (upgrade to `rich` for complex dossiers); `content_bundle` -> `rich`; fallback to `standard` when unspecified.
+- Retrieval/answer defaults by `question_type`:
+  - `scalar`/`categorical`: `rerank_retrieval` + `deterministic_first` (rules then LLM).
+  - `free_text`/`document`: `rerank_retrieval` with HyDE fallback + `ia_first`.
+  - `scorecard`: `graph_heavy` when graph artifacts exist, else `standard`.
+- Recompute rules: only when missing, `unresolved`/`stale`, or `force_regeneration=true`.
 
 ## Data models
 - Entities: `entity_id`, `entity_type`, `display_name`, `tenant_id`, `metadata`, timestamps.
