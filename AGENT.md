@@ -1,7 +1,7 @@
 # Agent Operating Guide
 
 ## Always check the docs first
-- Read and follow `doc/DAT.md`, `doc/SPECIFICATIONS.md`, and `doc/API.md` before starting any work.
+- Read and follow `doc/DAT.md`, `doc/SPECIFICATIONS.md`, and `doc/API.md` before starting any work. Use the conceptual schemas in `RATIONALE.md` and `doc/DAT.md` as the shared mental model.
 - Treat these documents as the source of truth; update them whenever decisions change scope, behavior, data, or interfaces.
 - If information is missing or unclear, capture the open questions in the docs and avoid shipping changes that conflict with them.
 

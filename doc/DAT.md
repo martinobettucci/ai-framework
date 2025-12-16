@@ -44,6 +44,31 @@
 - Observability: track latency, resolved rate, volume of sources/context size per tenant/entity type.
 - Default stack choice: Python API with FastAPI, Postgres/pgvector, S3-compatible blobs, Redis + Celery; can be swapped per deployment if documented.
 
+## Conceptual schemas
+
+### Domain relationships (question-first)
+```mermaid
+erDiagram
+  ENTITIES ||--o{ SOURCES : has
+  ENTITIES ||--o{ CONTEXTS : builds
+  ENTITIES ||--o{ QUESTIONS : anchors
+  QUESTIONS ||--o{ ANSWERS : resolves
+  CONTEXTS ||--o{ ANSWERS : scoped_by
+  ANSWERS ||--o{ ANSWER_EVENTS : logs
+```
+
+### Question-driven flow
+```mermaid
+flowchart LR
+  Q["Declare question<br>(schema + activation)"] --> S["Ingest sources"]
+  S --> C["Build context<br>(index/embeddings/graph/summaries)"]
+  C --> R["Retrieve + answer<br>per question_type"]
+  Q --> R
+  R --> A["Answer<br>confidence + provenance"]
+  A --> Re["Re-eval on context/question change"]
+  Re --> S
+```
+
 ## Open questions
 - [ ] Confirm graph store choice and rollout plan for graph-heavy features.
 - [ ] Clarify rollout order for use cases (Grants, content catalog, CRM) to prioritize features.

@@ -17,3 +17,46 @@
 - Begin with the questions and their schemas; only then decide ingestion/context/retrieval/answer strategies to satisfy them.
 - When adding features, place them in the pipeline/strategy/contract model: define/adjust the question contracts, select or extend strategies, and record context/versioning impacts.
 - Keep docs (`doc/DAT.md`, `doc/SPECIFICATIONS.md`, `doc/API.md`, `AGENT.md`) in sync with any change in contracts, defaults, roles, or token flows so downstream users rely on a single source of truth.
+
+## Conceptual schemas
+
+### Question-centric worldview
+```mermaid
+flowchart TD
+  Questions["Questions<br>(contract)"]
+  Entities["Entities<br>(anchor)"]
+  Sources["Sources<br>(raw signals)"]
+  Context["Context<br>(versioned artifacts)"]
+  Strategies["Strategies<br>(retrieval and answer)"]
+  Answers["Answers<br>(confidence + provenance)"]
+
+  Questions --> Entities
+  Entities --> Sources
+  Sources --> Context
+  Questions --> Strategies
+  Context --> Strategies
+  Strategies --> Answers
+  Answers --> Questions
+```
+
+### Lifecycle: declare → resolve → evolve
+```mermaid
+stateDiagram-v2
+  [*] --> Declare
+  Declare: Declare question<br>schema + activation
+  Declare --> Collect: pending questions
+  Collect: Collect signals<br>(ingest sources)
+  Collect --> Build: more signals
+  Build: Build context<br>(index/embeddings/graph/summaries)
+  Build --> Resolve
+  Resolve: Resolve question<br>per question_type
+  Resolve --> Judge
+  Judge: Activation<br>(min_confidence/evidence)
+  Judge --> Resolved: criteria met
+  Judge --> Stale: needs more context
+  Stale --> Collect
+  Resolved --> [*]
+  Resolved --> Evolve: context or question changes
+  Evolve: Re-eval on change<br>or force_regeneration
+  Evolve --> Collect
+```
